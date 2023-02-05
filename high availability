@@ -1,0 +1,107 @@
+# # Create Docker_Host AMI Image
+# resource "aws_ami_from_instance" "pacpet1_dockerserver_AMI" {
+#   name                    = "pacpet1_dockerserver_AMI"
+#   source_instance_id      = data.aws_instance.pacpet1_dockerserver.id
+
+#   depends_on = [
+#     aws_instance.pacpet1_dockerserver
+#   ]
+
+#   tags = {
+#     Name = "pacpet1_dockerserver_AMI"
+#   }
+# }
+
+# #Add an Application Load Balancer
+# resource "aws_lb" "pacpet1-alb" {
+#   name                       = "pacpet1-alb"
+#   internal                   = false
+#   load_balancer_type         = "application"
+#   security_groups            = [aws_security_group.pacpet1_docker_sg.id]
+#   subnets                    = [aws_subnet.pacpet1_pubsn_01.id, aws_subnet.pacpet1_pubsn_02.id]
+#   enable_deletion_protection = false
+  
+# }
+# #Add a load balancer Listener
+# resource "aws_lb_listener" "pacpet1-lb-listener" {
+#   load_balancer_arn = aws_lb.pacpet1-alb.arn
+#   port              = "80"
+#   protocol          = "HTTP"
+
+#   default_action {
+#     type             = "forward"
+#     target_group_arn = aws_lb_target_group.pacpet1-tg.arn
+#   }
+# }
+# # Create a Target Group for Load Balancer
+# resource "aws_lb_target_group" "pacpet1-tg" {
+#   name     = "pacpet1-tg"
+#   port     = 8080
+#   protocol = "HTTP"
+#   vpc_id   = aws_vpc.pacpet1_vpc.id
+#   health_check {
+#     healthy_threshold   = 3
+#     unhealthy_threshold = 5
+#     interval            = 30
+#     timeout             = 5
+#     path                = "/"
+#   }
+# }
+
+# #Create Target group attachment
+# resource "aws_lb_target_group_attachment" "pacpet1-tg-att" {
+#   target_group_arn = aws_lb_target_group.pacpet1-tg.arn
+#   target_id        = aws_instance.pacpet1_dockerserver.id
+#   port             = 8080
+# }
+
+# #Docker-launch-configuration
+# resource "aws_launch_configuration" "pacpet1-lc" {
+#   name_prefix                 = "pacpet1-lc"
+#   image_id                    = aws_ami_from_instance.pacpet1_dockerserver_AMI.id
+#   instance_type               = "t2.medium"
+#   security_groups             = [aws_security_group.pacpet1_docker_sg.id]
+#   associate_public_ip_address = true
+#   key_name                    = aws_key_pair.pacpet1_pub_key.key_name
+#   user_data                   = <<-EOF
+# #!/bin/bash
+# sudo systemctl enable docker
+# sudo setenforce 0
+# sudo systemctl start docker
+# sudo docker start pet-adoption-container
+# EOF
+ 
+# }
+
+# #Creating Autoscaling Group 
+# resource "aws_autoscaling_group" "pacpet1-asg" {
+#   name                      = "pacpet1-asg"
+#   desired_capacity          = 2
+#   max_size                  = 3
+#   min_size                  = 2
+#   health_check_grace_period = 300
+#   health_check_type         = "EC2"
+#   force_delete              = true
+#   launch_configuration      = aws_launch_configuration.pacpet1-lc.name
+#   vpc_zone_identifier       = [aws_subnet.pacpet1_pubsn_01.id, aws_subnet.pacpet1_pubsn_02.id]
+#   target_group_arns         = ["${aws_lb_target_group.pacpet1-tg.arn}"]
+#   tag {
+#     key                 = "Name"
+#     value               = "pacpet1-asg"
+#     propagate_at_launch = true
+#   }
+# }
+
+# #Creating Autoscaling Policy   
+# resource "aws_autoscaling_policy" "pacpet1-asg-pol" {
+#   name                   = "pacpet1-asg-pol"
+#   policy_type            = "TargetTrackingScaling"
+#   adjustment_type        = "ChangeInCapacity"
+#   autoscaling_group_name = aws_autoscaling_group.pacpet1-asg.name
+#   target_tracking_configuration {
+#     predefined_metric_specification {
+#       predefined_metric_type = "ASGAverageCPUUtilization"
+#     }
+#     target_value = 60.0
+#   }
+# }

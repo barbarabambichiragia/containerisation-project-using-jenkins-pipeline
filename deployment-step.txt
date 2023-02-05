@@ -1,0 +1,124 @@
+Note: if you having issue with tfstate lock. And you have unable to apply 
+terraform unable to write to your your current tfstate to s3. follow the step
+comment the statefile-configuration.tf out
+run terraform init -reconfigure, this should resolve it
+
+Note: you can use cmd/bash on your vscode because the keypair of the instances will be in the same folder
+ since we have provision a keypair resource via terraform
+      
+after you apply
+start with sonarqube server, this will give you enough time for the user data to be written into other server
+
+go to sonarqube_userdata.txt
+- copy the data into your server.
+-after you finished the configuration and reboot, while you waiting you can go into other server
+and after reboot; run below command to see if your sonarqube is up
+------ tail -f /opt/sonarqube/logs/sonar*.log 
+---- copy the sonarqube ip add into your browser (sonarqubeip:9000) and configured the generate token to be used in jenkins
+    ---initiall login (username :admin ; password :admin), then change the password
+    ---- go to security tap go to administration tap > security tap > user > token > generate token
+    ---- add credentials
+    -------
+
+
+
+login into Jenkins server
+ -- check if the jenkin_rsa file is owned by the ec2-user(cd .ssh/), if not: run below command from home dir 
+  ---- sudo chmod -R 700 .ssh/
+  ---- sudo chown -R ec2-user:ec2-user .ssh/jenkins_rsa
+  reason: keypair (private key) passed to this file is to use to connect with ansible.
+  -----check if you if you can ping ansible from ansible
+     command: ssh -i jenkins_rsa ec2-user@ansibleip
+
+  ---- copy the jenkins ip add into your browser (jenkinsip:8080) and configured the jenkins
+    -----go to manage jenkins
+    ----install manage plugins and install plugins (ssh,ssh-agent,maven)
+    ---- install 
+    ---- add credentials + sonarqube token
+    ----- to add credentials
+          go to manage jenkins > manage credentials > click global > add credentials
+          (1)git - select username and password
+                 - git username
+                 - git token
+                 - ID (should be the same in our jenkinsfile)
+            (2) select ssh with username with private key
+            -- - ID (should be the same in our jenkinsfile)
+            --username: ec2-user
+            --paste the private from jenkins server (jenkin_rsa) into private key tap (click add)
+            (3) select secret text
+           ---- name (should be the same in our jenkinsfile)
+             ---secret  (token from sonarqube)
+             - ID (should be the same in our jenkinsfile)
+    ----install manage plugins and install plugins (sonarqube-scanner)
+
+
+        go to manage jenkins > global tool configuration > configure maven
+        -- name (should be the same in our jenkinsfile)
+        
+        go to manage jenkins > configure system
+          (1) ---ssh
+            ----hostname (ansibleip)
+            ---port (22)
+            ---credentilas (select ec2-user {jenkins credentials created} from drop down)
+            click check connection to test. 
+        (2) sonarqube server
+           --- tick env variables
+           --- name (should be the same in our jenkinsfile)
+           ---sonarqube server url
+           --- select the sonarqube credentials created earlier.
+
+           Apply > save
+
+
+             
+            
+    -------edit the jenkins file and 
+           make sure you use same variable you used in jenkins console (maven, git, sonar, project name),
+            
+    1st jenkins job: run your pipeline job (point to jenkinsfile)
+
+    ---select new item from jenkins dashboard
+    >  name (should be the same in our jenkinsfile) > select pipeline > ok > pipeline tap 
+          select pipeline script if wants to copy the jenkins content into the box 
+          OR select pipeline script from SCM if you wants to point jenkile file  on github
+
+    apply  >  save
+
+    2nd job 
+    ---select new item from jenkins dashboard
+    name (your choice)  > select freestyle project > ok
+    Build Trigger > select (build after other project are built) > project to watch = 1st pipeline job
+    then
+    under Build > select > Execute shell script on remote host using ssh (ansible server)
+    copy the ansible palybook command below:
+           ansible-playbook -i /etc/ansible/hosts /opt/docker/docker-image.yml
+           ansible-playbook -i /etc/ansible/hosts /opt/docker/docker-container.yml
+           ansible-playbook -i /etc/ansible/hosts /opt/docker/newrelic.yml
+
+    the tick Execute each line 
+
+    Apply  >  save
+
+
+
+  
+login into ansible and check if all the user data passed to the server
+-- cd /etc/ansible
+-- ansible -m ping all (to check if the ansible can ping docker and localhost -[data passsed via userdata])
+
+go back to jenkins console and deploy your application:
+
+Run the pipeline job, which will triger the 2nd job after build.
+
+copy your apps / docker-ip:8080 to browser to check your apps
+
+check the code anaysis on sonarqube console
+check your apps monitor on newrelic
+
+Any question?
+
+
+pacpet1_ansibleserver = "18.130.170.95"
+pacpet1_dockerserver = "3.8.172.197"
+pacpet1_jenkinsserver = "3.9.134.241"
+pacpet1_sonarqubeserver = "13.40.98.27"

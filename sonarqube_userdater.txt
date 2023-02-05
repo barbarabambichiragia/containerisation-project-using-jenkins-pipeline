@@ -1,0 +1,55 @@
+sudo su - postgres
+createuser sonar
+psql
+ALTER USER sonar WITH ENCRYPTED password 'pacpd';
+CREATE DATABASE sonarqube OWNER sonar;
+GRANT ALL PRIVILEGES ON DATABASE sonarqube to sonar;
+\q
+exit
+sudo apt-get install unzip -y
+sudo wget https://binaries.sonarsource.com/Distribution/sonarqube/sonarqube-8.6.0.39681.zip
+sudo unzip sonarqube*.zip -d /opt
+sudo mv /opt/sonarqube-8.6.0.39681 /opt/sonarqube -v
+sudo groupadd sonar
+sudo useradd -d /opt/sonarqube -g sonar sonar
+sudo chown sonar:sonar /opt/sonarqube -R
+-------------------------------
+sudo vi /opt/sonarqube/conf/sonar.properties
+sonar.jdbc.username=sonar
+sonar.jdbc.password=pacpd
+sonar.jdbc.url=jdbc:postgresql://localhost/sonarqube
+-------------------------------
+sudo vi /opt/sonarqube/bin/linux-x86-64/sonar.sh
+RUN_AS_USER=sonar
+--------------------------------
+sudo vi /etc/systemd/system/sonar.service
+[Unit]
+Description=SonarQube service
+After=syslog.target network.target
+
+[Service]
+Type=forking
+
+ExecStart=/opt/sonarqube/bin/linux-x86-64/sonar.sh start
+ExecStop=/opt/sonarqube/bin/linux-x86-64/sonar.sh stop
+
+User=sonar
+Group=sonar
+Restart=always
+
+LimitNOFILE=65536
+LimitNPROC=4096
+[Install]
+WantedBy=multi-user.target
+----------------------------------------------
+sudo systemctl enable sonar
+sudo systemctl start sonar
+----------------------------------------------
+sudo vi /etc/sysctl.conf
+vm.max_map_count=262144
+fs.file-max=65536
+ulimit -n 65536
+ulimit -u 4096
+---------------------------------------------
+sudo reboot
+tail -f /opt/sonarqube/logs/sonar*.log
